@@ -1,0 +1,353 @@
+<?php
+use Magento\Framework\App\Action\Action;
+
+/**
+ *
+ * @var \Magento\Catalog\Model\ResourceModel\Product\Collection $productCollection
+ * @var \Magento\Catalog\Model\Product $product
+ * @var \Magento\Catalog\Model\CategoryFactory $_categoryFactory
+ * @var \RLTSquare\CategoryPage\Helper\Category $_categoryHelper
+ *
+ */
+$objectManager =  \Magento\Framework\App\ObjectManager::getInstance();
+$_helper = $this->helper('Magento\Catalog\Helper\Output');
+$_productHelper = $this->helper('\RLTSquare\Core\Helper\Product');
+$_categoryHelper = $this->helper('\RLTSquare\CategoryPage\Helper\Category');
+/** @var \RLTSquare\CategoryPage\Helper\Collection $collectionHelper */
+$collectionHelper = $objectManager->get(\RLTSquare\CategoryPage\Helper\Collection::class);
+
+
+$catTitle = array(
+    "grocery",
+	"kids",
+	"pets",
+    "Home & living"
+);
+//getting most viewed items
+$from = date("Y/m/d",strtotime("-3 months"));
+$to = date("Y/m/d");
+
+//getting recent viewed items
+$recentViewed = $objectManager->get(Magento\Reports\Block\Product\Viewed::class);
+$_collection = $recentViewed->getItemsCollection()->setPageSize(5);
+if ($_collection->getSize() > 1){
+$allCatIdCount = 0;
+$allCatIds = array();
+$highestProductPrice = 0;
+foreach ($_collection as $_product){
+    $catIds = $_product->getCategoryIds(); 
+    $productPrice = $_product->getPrice();
+    $idCount = count($catIds);
+    $allCatIds[$allCatIdCount] = $catIds[$idCount-1];
+    if($productPrice > $highestProductPrice){
+    $highestProductPrice = $productPrice;
+    }
+    $allCatIdCount++;
+}
+
+//$catCollection = $categoryFactory->create()->getCollection()->addAttributeToSelect("*")->addFieldToFilter('ID',$allCatIds);
+$allDealsCollection = $objectManager->create('Magento\Catalog\Model\ResourceModel\Product\Collection');
+$allDealsCollection->addAttributeToFilter('is_best_seller', \Magento\Catalog\Model\Product\Attribute\Source\Boolean::VALUE_YES);
+$allDealsCollection->setPageSize(20);
+$all_items = array();
+$templateType = \Magento\Catalog\Block\Product\ReviewRendererInterface::SHORT_VIEW;
+$image = 'category_page_grid';
+$pos = $block->getPositioned();
+$viewMode = 'grid';
+?>
+<div class="prolist-section">
+    <div class="section-title center lightstgreen-bg">
+    <h2>Just For You</h2>
+    <a href="#" class="showmore">Show More <i class="fa fa-caret-right" aria-hidden="true"></i></a>
+    </div>
+    <div class="row">
+        <?php 
+        $counter=0;
+        $counter1=0;
+        $productsShowed = 0;
+        $counter2 = 0;
+        for ($i=0 ; $i < count($allCatIds);$i++) {
+            $categoryFactory = $objectManager->get('Magento\Catalog\Model\CategoryFactory');
+            $category = $categoryFactory->create()->load($allCatIds[$i]);
+            $_productCollection = $category->getProductCollection()->addAttributeToSelect('*')->setPageSize(10);            
+            //if($counter == 0 || $counter1 == 3){
+            //    $_productCollection = $category->getProductCollection()->addAttributeToSelect('*')->addAttributeToFilter('is_best_seller', '1')->setPageSize(3);
+            //}else{
+            //    $_productCollection = $category->getProductCollection()->addAttributeToSelect('*')->addAttributeToFilter('is_best_seller', '1')->setPageSize(2);
+            //}
+            $_productCollection = $collectionHelper->getAvailableProducts($_productCollection);
+            foreach ($_productCollection as $_product){
+                $allProductIds[$counter2] = $_product->getId();
+                $counter2++;
+                //echo " in foreach";
+            }
+            //print_r($allProductIds);
+            shuffle($allProductIds);
+            //echo "\n";
+            //print_r($allProductIds);
+        }
+            //foreach ($allProductIds as $productId): 
+            for($j=0;$j<count($allProductIds);$j++){
+                $productFactor = $objectManager->get(\Magento\Catalog\Model\Product::class);
+                $_product = $productFactor->load($allProductIds[$j]);
+                if ($productsShowed < 100){
+                    $newProductPrice = $_product->getPrice();
+                    if ($newProductPrice <= $highestProductPrice){ ?>
+                        <div class="col-md2 pro-post">
+                            <?php $productImage = $block->getImage($_product, $image);
+                        if ($pos != null) {
+                            $position = ' style="left:' . $productImage->getWidth() . 'px;'
+                                        . 'top:' . $productImage->getHeight() . 'px;"';
+                        }
+                        ?>
+                            <div class="pro-image">
+                            <a href="<?= /* @escapeNotVerified */ $_product->getProductUrl() ?>">
+                                <img src="<?= $productImage->getImageUrl() ?>" alt="" />
+                            </a>
+                                <div class="product-item-inner">
+                                <div class="product actions product-item-actions"<?= strpos($pos, $viewMode . '-actions') ? $position : '' ?>>
+                                <div class="pro-actions"<?= strpos($pos, $viewMode . '-primary') ? $position : '' ?>>
+                                                    <?php if ($_product->isSaleable()): ?>
+                                                        <?php $postParams = $block->getAddToCartPostParams($_product); ?>
+                                                        <form data-role="tocart-form" data-product-sku="<?=  /* @NoEscape */ $_product->getSku() ?>" action="<?= /* @NoEscape */ $postParams['action'] ?>" method="post">
+                                                            <input type="hidden" name="is_perishable" value="<?= $_product->getIsPerishable() ? '1' : '0' ?>">
+                                                            <input type="hidden" name="product" value="<?= /* @escapeNotVerified */ $postParams['data']['product'] ?>">
+                                                            <input type="hidden" name="<?= /* @escapeNotVerified */ Action::PARAM_NAME_URL_ENCODED ?>" value="<?= /* @escapeNotVerified */ $postParams['data'][Action::PARAM_NAME_URL_ENCODED] ?>">
+                                                            <?= $block->getBlockHtml('formkey') ?>
+                                                            <button type="submit"
+                                                                    title="<?= $block->escapeHtml(__('Add to Cart')) ?>"
+                                                                    class="pro-addtocart">
+                                                                <!--                                                <img src="--><?php //echo $block->getViewFileUrl('images/product/addtocart.png') ?><!--">-->
+                                                                <i class="fa fa-shopping-cart" aria-hidden="true"></i>
+                                                                <!--												<span>--><?//= /* @escapeNotVerified */ __('Add to Cart') ?><!--</span>-->
+                                                                Add to Cart
+                                                            </button>
+                                                        </form>
+                                                    <?php else: ?>
+                                                        <?php if ($_product->isAvailable()): ?>
+                                                            <div class="stock available"><span><?= /* @escapeNotVerified */ __('In stock') ?></span></div>
+                                                        <?php else: ?>
+                                                            <div class="stock unavailable"><span><?= /* @escapeNotVerified */ __('Out of stock') ?></span></div>
+                                                        <?php endif; ?>
+                                                    <?php endif; ?>
+                                                    <?php
+                                            $wishlistBlock = $this->getLayout()->createBlock("Magento\Wishlist\Block\Catalog\Product\ProductList\Item\AddTo\Wishlist")->setTemplate("Magento_Wishlist::catalog/product/list/addto/wishlist.phtml");
+                                            $wishlistBlock->setProduct($_product);
+                                            echo $wishlistBlock->toHtml();
+                                        ?>
+                                        <?php
+                                        $subscriptionBlock = $this->getLayout()->createBlock("RLTSquare\Subscription\Block\Subscription")->setTemplate("RLTSquare_Subscription::product/view/subscribe.phtml");
+                                        $subscriptionBlock->setProduct($_product);
+                                        $subscriptionBlock->setBlockName(RLTSquare\Subscription\Model\ProductBlock::CATEGORY);
+                                        echo $subscriptionBlock->toHtml();
+                                        ?>
+                                    </div>
+                                </div>
+                            </div>
+                            </div>
+                            
+                                <h3>
+                                <a href="<?= /* @escapeNotVerified */ $_product->getProductUrl() ?>">
+                                    <?php
+                                    $productName = $_helper->productAttribute($_product, $_product->getName(), 'name');
+                                    if (strlen($productName)>45){
+                                    $productName = substr($productName,0,45)."...";
+                                    }
+                                    ?>
+                                    <span>EEZY</span>
+                                    <?= /* @escapeNotVerified */ $productName ?>
+                                    </a>
+                                </h3>
+                            
+                            <?= /* @escapeNotVerified */ $block->getProductPrice($_product) ?>
+                            <?php 
+                            $reviewString = "Be The First To Review This Product";
+                            $reviewNew = $block->getReviewsSummaryHtml($_product, $templateType, true);
+                            if($reviewString == $reviewNew){
+                            ?>
+                            <?php echo $block->getReviewsSummaryHtml($_product, $templateType, true); 
+                            }else{
+                            ?>
+                            <div class="product-reviews-summary short">
+                            <div class="rating-summary">
+                            <span class="label"><span>Rating:</span></span>
+                            <div class="rating-result" title="100%">
+                            <span style="width:100%"><span>100%</span></span>
+                            </div>
+                            </div>
+                            <div class="reviews-actions">
+                            <a class="action view" href="https://eezy.store/orchard-toys-wheres-my-cupcake-game.html#reviews">(2)&nbsp;<span>Reviews</span></a>
+                            </div>
+                            </div>
+                            <?php } ?>
+                        </div>
+                    <?php
+                    $productsShowed++;
+                    }
+                }   
+            $counter++; 
+            $counter1++;
+            //endforeach;
+            }
+        
+        ?> 
+        <div id="load-more-product">
+<a id="load-more-product-link" href="javascript:void(0)">Load more Items</a>
+</div>
+<div id="load-more-loader">
+<span>Loading</span>
+</div>
+    </div>
+</div>
+
+    <?php }  
+    if ($_collection->getSize() < 1){
+        $storeManager =   $objectManager->get(\Magento\Store\Model\StoreManagerInterface::class);
+        $storeId = $storeManager->getStore()->getId();
+        $mostViewedCollection = $objectManager->get(\Magento\Sales\Model\ResourceModel\Report\Bestsellers\CollectionFactory::class);
+        $mostCollection = $mostViewedCollection->create()
+        ->setPeriod('month');
+        foreach ($mostCollection as $product) {
+            $productIds[] = $product->getProductId();
+        }
+        $image = 'category_page_grid';
+        $pos = $block->getPositioned();
+        $viewMode = 'grid';
+        $templateType = \Magento\Catalog\Block\Product\ReviewRendererInterface::SHORT_VIEW;
+    ?>
+    <div class="prolist-section">
+    <div class="section-title center lightstgreen-bg">
+    <h2>Just For You</h2>
+    <a href="#" class="showmore">Show More <i class="fa fa-caret-right" aria-hidden="true"></i></a>
+    </div>
+    <div class="row">
+        <?php 
+        $justForYouCollection = $objectManager->get(\Magento\Catalog\Model\ResourceModel\Product\CollectionFactory::class);
+        $collection = $justForYouCollection->create()->addMinimalPrice()->addFinalPrice()->addTaxPercents()->addAttributeToSelect('*')->addStoreFilter($storeId)->setPageSize(10);
+        
+            foreach ($collection as $product) { ?>                    
+                        <div class="col-md2 pro-post">
+                            <?php $productImage = $block->getImage($product, $image); 
+                        if ($pos != null) {
+                            $position = ' style="left:' . $productImage->getWidth() . 'px;'
+                                        . 'top:' . $productImage->getHeight() . 'px;"';
+                        }
+                        ?>
+                            <div class="pro-image">
+                                <img src="<?= $productImage->getImageUrl() ?>" alt="" />
+                                <div class="product-item-inner">
+                                <div class="product actions product-item-actions"<?= strpos($pos, $viewMode . '-actions') ? $position : '' ?>>
+                                <div class="pro-actions"<?= strpos($pos, $viewMode . '-primary') ? $position : '' ?>>
+                                                    <?php if ($product->isSaleable()): ?>
+                                                        <?php $postParams = $block->getAddToCartPostParams($product); ?>
+                                                        <form data-role="tocart-form" data-product-sku="<?=  /* @NoEscape */ $product->getSku() ?>" action="<?= /* @NoEscape */ $postParams['action'] ?>" method="post">
+                                                            <input type="hidden" name="is_perishable" value="<?= $product->getIsPerishable() ? '1' : '0' ?>">
+                                                            <input type="hidden" name="product" value="<?= /* @escapeNotVerified */ $postParams['data']['product'] ?>">
+                                                            <input type="hidden" name="<?= /* @escapeNotVerified */ Action::PARAM_NAME_URL_ENCODED ?>" value="<?= /* @escapeNotVerified */ $postParams['data'][Action::PARAM_NAME_URL_ENCODED] ?>">
+                                                            <?= $block->getBlockHtml('formkey') ?>
+                                                            <button type="submit"
+                                                                    title="<?= $block->escapeHtml(__('Add to Cart')) ?>"
+                                                                    class="pro-addtocart">
+                                                                <!--                                                <img src="--><?php //echo $block->getViewFileUrl('images/product/addtocart.png') ?><!--">-->
+                                                                <i class="fa fa-shopping-cart" aria-hidden="true"></i>
+                                                                <!--												<span>--><?//= /* @escapeNotVerified */ __('Add to Cart') ?><!--</span>-->
+                                                                Add to Cart
+                                                            </button>
+                                                        </form>
+                                                    <?php else: ?>
+                                                        <?php if ($product->isAvailable()): ?>
+                                                            <div class="stock available"><span><?= /* @escapeNotVerified */ __('In stock') ?></span></div>
+                                                        <?php else: ?>
+                                                            <div class="stock unavailable"><span><?= /* @escapeNotVerified */ __('Out of stock') ?></span></div>
+                                                        <?php endif; ?>
+                                                    <?php endif; ?>
+                                                    <?php
+                                            $wishlistBlock = $this->getLayout()->createBlock("Magento\Wishlist\Block\Catalog\Product\ProductList\Item\AddTo\Wishlist")->setTemplate("Magento_Wishlist::catalog/product/list/addto/wishlist.phtml");
+                                            $wishlistBlock->setProduct($product);
+                                            echo $wishlistBlock->toHtml();
+                                        ?>
+                                        <?php
+                                        $subscriptionBlock = $this->getLayout()->createBlock("RLTSquare\Subscription\Block\Subscription")->setTemplate("RLTSquare_Subscription::product/view/subscribe.phtml");
+                                        $subscriptionBlock->setProduct($product);
+                                        $subscriptionBlock->setBlockName(RLTSquare\Subscription\Model\ProductBlock::CATEGORY);
+                                        echo $subscriptionBlock->toHtml();
+                                        ?>
+                                    </div>
+                                </div>
+                            </div>
+                            </div>
+                            <a href="<?= /* @escapeNotVerified */ $product->getProductUrl() ?>">
+                                <h3>
+                                    <?php
+                                    $productName = $_helper->productAttribute($product, $product->getName(), 'name');
+                                    if (strlen($productName)>45){
+                                    $productName = substr($productName,0,45)."...";
+                                    }
+                                    ?>
+                                    <span>EEZY</span>
+                                    <?= /* @escapeNotVerified */ $productName ?>
+                                </h3>
+                            </a>
+                            <?= /* @escapeNotVerified */ $block->getProductPrice($product) ?>
+                            <?php 
+                            $reviewString = "Be The First To Review This Product";
+                            $reviewNew = $block->getReviewsSummaryHtml($product, $templateType, true);
+                            if($reviewString != $reviewNew){
+                            ?>
+                            <?php echo $block->getReviewsSummaryHtml($product, $templateType, true); 
+                            }else{
+                            ?>
+                            <div class="product-reviews-summary short">
+                            <div class="rating-summary">
+                            <span class="label"><span>Rating:</span></span>
+                            <div class="rating-result" title="100%">
+                            <span style="width:100%"><span>100%</span></span>
+                            </div>
+                            </div>
+                            <div class="reviews-actions">
+                            <a class="action view" href="https://eezy.store/orchard-toys-wheres-my-cupcake-game.html#reviews">(2)&nbsp;<span>Reviews</span></a>
+                            </div>
+                            </div>
+                            <?php } ?>
+                        </div>
+                    <?php
+            }
+        ?> 
+        <div id="load-more-product">
+<a id="load-more-product-link" href="javascript:void(0)">Load more Items</a>
+</div>
+<div id="load-more-loader">
+<span>Loading</span>
+    </div>
+</div>
+
+<?php }?>
+
+<script>
+require(["jquery"], function($) {
+var url = $('.next').attr('href');
+if (typeof url === "undefined") {
+$('#load-more-product').html('');
+}
+$('#load-more-product-link').on('click', function() {
+var url = $('.next').attr('href');
+$('#load-more-product').hide();
+$('#load-more-loader').show();
+$.get(url, function(data) {
+$('#load-more-loader').hide();
+$('#load-more-product').show();
+var result = $(data).find('.col-md2.pro-post');
+var nxtUrl = $(data).find('.next').attr('href');
+result.each(function(index, value) {
+$('.col-md2.pro-post').append(value);
+$("form[data-role='tocart-form']").catalogAddToCart();
+});
+if (typeof nxtUrl === "undefined") {
+$('#load-more-product').html('<em>No More product in this Category.</em>');
+} else {
+$('.next').attr('href', nxtUrl);
+}
+});
+});
+});
+</script>
